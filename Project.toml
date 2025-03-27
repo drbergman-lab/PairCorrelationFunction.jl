@@ -1,0 +1,13 @@
+name = "PairCorrelationFunction"
+uuid = "1da3c5ec-5de6-497d-83f1-8bbf7fdc92ec"
+authors = ["Daniel Bergman <danielrbergman@gmail.com> and contributors"]
+version = "0.0.1"
+
+[compat]
+julia = "1.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
