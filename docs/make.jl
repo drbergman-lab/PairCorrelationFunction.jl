@@ -8,7 +8,7 @@ makedocs(;
     authors="Daniel Bergman <danielrbergman@gmail.com> and contributors",
     sitename="PairCorrelationFunction.jl",
     format=Documenter.HTML(;
-        canonical="https://Daniel Bergman.github.io/PairCorrelationFunction.jl",
+        canonical="https://drbergman-lab.github.io/PairCorrelationFunction.jl",
         edit_link="main",
         assets=String[],
     ),
@@ -18,6 +18,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/Daniel Bergman/PairCorrelationFunction.jl",
-    devbranch="main",
+    repo="github.com/drbergman-lab/PairCorrelationFunction.jl",
+    devbranch="development",
 )
