@@ -1,6 +1,9 @@
 module PairCorrelationFunction
 
 using NaNStatistics
+
+export pcf, Constants
+
 struct Constants{N}
     grid_size::NTuple{N, Float64}
     base_point::NTuple{N, Float64}
@@ -14,14 +17,14 @@ struct Constants{N}
     end
 
     function Constants(xlims::Tuple{Float64, Float64}, ylims::Tuple{Float64, Float64}, radii)
-        grid_size = [diff(L) for L in [xlims, ylims]] |> Tuple
+        grid_size = [L[2]-L[1] for L in [xlims, ylims]] |> Tuple
         base_point = [minimum(L) for L in [xlims, ylims]] |> Tuple
         domain_volume = prod(grid_size)
         return Constants(grid_size, base_point, domain_volume, radii)
     end
 
     function Constants(xlims::Tuple{Float64, Float64}, ylims::Tuple{Float64, Float64}, zlims::Tuple{Float64, Float64}, radii)
-        grid_size = [diff(L) for L in [xlims, ylims, zlims]] |> Tuple
+        grid_size = [L[2] - L[1] for L in [xlims, ylims, zlims]] |> Tuple
         base_point = [minimum(L) for L in [xlims, ylims, zlims]] |> Tuple
         domain_volume = prod(grid_size)
         return Constants(grid_size, base_point, domain_volume, radii)
