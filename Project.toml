@@ -3,7 +3,11 @@ uuid = "1da3c5ec-5de6-497d-83f1-8bbf7fdc92ec"
 authors = ["Daniel Bergman <danielrbergman@gmail.com> and contributors"]
 version = "0.0.1"
 
+[deps]
+NaNStatistics = "b946abbf-3ea7-4610-9019-9858bfdeaf2d"
+
 [compat]
+NaNStatistics = "0.6.49"
 julia = "1.10"
 
 [extras]
