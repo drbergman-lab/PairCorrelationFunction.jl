@@ -40,7 +40,6 @@ function pcf(centers::AbstractMatrix{<:Real}, targets::AbstractMatrix{<:Real}, c
         distances[i, :] = (targets .- center') .^ 2 |> x -> sum(x, dims=2)
         volumes .+= computeVolume(vec(center), constants)
     end
-    println("volumes = $volumes")
     N, _ = histcountindices(vec(distances .|> sqrt), constants.radii)
     return (N./volumes) ./ (n_targets/constants.domain_volume)
 end
