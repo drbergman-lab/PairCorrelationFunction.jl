@@ -4,6 +4,34 @@ using NaNStatistics
 
 export pcf, Constants
 
+"""
+    Constants
+
+A struct to hold the constants needed for the pair correlation function calculation.
+
+# Fields
+- `grid_size::NTuple{N, Float64}`: The size of the grid in each dimension.
+- `base_point::NTuple{N, Float64}`: The base point of the grid to be used to calculate distance to the boundary.
+- `domain_volume::Float64`: The volume of the domain.
+- `radii::AbstractRange{<:Real}`: The range of radii to be used for the pair correlation function.
+- `nr::Int`: The number of radii.
+- `radii2::AbstractVector{<:Real}`: The squared values of the radii.
+
+# Examples
+```jldoctest
+using PairCorrelationFunction
+xlims = (-450.0, 450.0)
+ylims = (-450.0, 450.0)
+radii = 0:20.0:1300.0
+constants = Constants(xlims, ylims, radii)
+# output
+Constants for 2D pair correlation function:
+  grid_size: (900.0, 900.0)
+  base_point: (-450.0, -450.0)
+  domain_volume: 810000.0
+  radii: 0.0 - 1300.0
+  #annuli: 65
+"""
 struct Constants{N}
     grid_size::NTuple{N, Float64}
     base_point::NTuple{N, Float64}
@@ -31,6 +59,31 @@ struct Constants{N}
     end
 end
 
+function Base.show(io::IO, ::MIME"text/plain", constants::Constants)
+    println(io, "Constants for $(length(constants.grid_size))D pair correlation function:")
+    println(io, "  grid_size: $(constants.grid_size)")
+    println(io, "  base_point: $(constants.base_point)")
+    println(io, "  domain_volume: $(constants.domain_volume)")
+    println(io, "  radii: $(constants.radii |> first) - $(constants.radii |> last)")
+    println(io, "  #annuli: $(constants.nr-1)")
+end
+
+"""
+    pcf(centers::AbstractMatrix{<:Real}, targets::AbstractMatrix{<:Real}, constants::Constants)
+
+Calculate the pair correlation function for a set of centers and targets.
+
+For each point in the `centers` matrix, compute the distance to each point in the `targets` matrix.
+Bin these distances by the radii defined in the `constants` object.
+
+# Arguments
+- `centers::AbstractMatrix{<:Real}`: A matrix of centers, where each row is a center.
+- `targets::AbstractMatrix{<:Real}`: A matrix of targets, where each row is a target.
+- `constants::Constants`: A `Constants` object containing the grid size, base point, domain volume, and radii.
+
+# Returns
+- `pcf::Vector{Float64}`: A vector of normalized target densities for each annulus around all centers.
+"""
 function pcf(centers::AbstractMatrix{<:Real}, targets::AbstractMatrix{<:Real}, constants::Constants)
     n_centers = size(centers, 1)
     n_targets = size(targets, 1)
@@ -40,7 +93,6 @@ function pcf(centers::AbstractMatrix{<:Real}, targets::AbstractMatrix{<:Real}, c
         distances[i, :] = (targets .- center') .^ 2 |> x -> sum(x, dims=2)
         volumes .+= computeVolume(vec(center), constants)
     end
-    println("volumes = $volumes")
     N, _ = histcountindices(vec(distances .|> sqrt), constants.radii)
     return (N./volumes) ./ (n_targets/constants.domain_volume)
 end
@@ -74,7 +126,7 @@ function addQuarterArea!(A::Vector{Float64}, center::Tuple{Float64, Float64}, co
     A[.!rb] .+= x*y
 end
 
-function computeVolume(center::Vector{Float64}, constants::Constants{3})
+function computeVolume(center::AbstractVector{<:Real}, constants::Constants{3})
     throw(ErrorException("Not implemented"))
 end
 
