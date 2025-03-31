@@ -59,8 +59,10 @@ struct Constants{N}
     end
 end
 
+Base.ndims(::Constants{N}) where N = N
+
 function Base.show(io::IO, ::MIME"text/plain", constants::Constants)
-    println(io, "Constants for $(length(constants.grid_size))D pair correlation function:")
+    println(io, "Constants for $(ndims(constants))D pair correlation function:")
     println(io, "  grid_size: $(constants.grid_size)")
     println(io, "  base_point: $(constants.base_point)")
     println(io, "  domain_volume: $(constants.domain_volume)")
@@ -91,14 +93,21 @@ function pcf(centers::AbstractMatrix{<:Real}, targets::AbstractMatrix{<:Real}, c
     volumes = zeros(Float64, constants.nr - 1)
     for (i, center) in enumerate(eachrow(centers))
         distances[i, :] = (targets .- center') .^ 2 |> x -> sum(x, dims=2)
-        volumes .+= computeVolume(vec(center), constants)
+        relative_center = vec(center) .- constants.base_point
+        
+        @assert all(relative_center .>= 0) && all(relative_center .<= constants.grid_size) """
+        Center point is outside the domain:
+            $(vec(center)) ∉ $(join(["[$(join(constants.base_point[i] .+ [0, constants.grid_size[i]],", "))]" for i in 1:ndims(constants)], " x "))
+        """
+
+        volumes .+= computeVolume(relative_center, constants)
     end
     N, _ = histcountindices(vec(distances .|> sqrt), constants.radii)
     return (N./volumes) ./ (n_targets/constants.domain_volume)
 end
 
 function computeVolume(center::AbstractVector{<:Real}, constants::Constants{2})
-    x, y = center .- constants.base_point
+    x, y = center
     A = zeros(Float64, constants.nr)
     for x₀ in [x, constants.grid_size[1] - x]
         for y₀ in [y, constants.grid_size[2] - y]
@@ -110,12 +119,12 @@ end
 
 function addQuarterArea!(A::Vector{Float64}, center::Tuple{Float64, Float64}, constants::Constants{2})
     r, r2 = constants.radii, constants.radii2
-    x, y = (minimum(center), maximum(center)) #! this algorithm works by assuming that x0<=y0
+    x, y = (minimum(center), maximum(center)) #! this algorithm works by assuming that x<=y
     rb = r2 .<= x^2 + y^2 #! rvalues that mean the shell is still bounded by the origin
     rx = rb .&& r .> x #! rvalues that mean the shell has hit the y-axis
     ry = rb .&& r .> y #! rvalues that mean the shell has hit the x-axis
 
-    A[rb] += 0.25 * π * r2[rb] #! add the full area of the shell before correcting for going outside the domain
+    A[rb] .+= 0.25 * π * r2[rb] #! add the full area of the shell before correcting for going outside the domain
 
     x1 = sqrt.(r2[ry] .- y^2) #! x-values where the shell hits the y-axis
     y1 = sqrt.(r2[rx] .- x^2) #! y-values where the shell hits the x-axis
@@ -127,7 +136,116 @@ function addQuarterArea!(A::Vector{Float64}, center::Tuple{Float64, Float64}, co
 end
 
 function computeVolume(center::AbstractVector{<:Real}, constants::Constants{3})
-    throw(ErrorException("Not implemented"))
+    x, y, z = center
+    A = zeros(Float64, constants.nr)
+    for x₀ in [x, constants.grid_size[1] - x]
+        for y₀ in [y, constants.grid_size[2] - y]
+            for z₀ in [z, constants.grid_size[3] - z]
+                addOctantVolume!(A, (x₀, y₀, z₀), constants)
+            end
+        end
+    end
+    return diff(A)
 end
 
+function addOctantVolume!(V::Vector{Float64}, center::NTuple{3,Float64}, constants::Constants{3})
+    r, r2 = constants.radii, constants.radii2
+    x, y, z = sort([center...]) #! this algorithm works by assuming that x<=y<=z
+
+    x2, y2, z2 = x^2, y^2, z^2
+    x3, y3, z3 = x*x2, y*y2, z*z2
+    xy, xz, yz = x*y, x*z, y*z
+
+    rx = r .> x #! rvalues that mean the shell has hit the yz-plane
+    ry = r .> y #! rvalues that mean the shell has hit the xz-plane
+    rz = r .> z #! rvalues that mean the shell has hit the xy-plane
+    rxy = r .> sqrt(x2 + y2) #! rvalues that mean the shell has hit the z-axis
+    rxz = r .> sqrt(x2 + z2) #! rvalues that mean the shell has hit the y-axis
+    ryz = r .> sqrt(y2 + z2) #! rvalues that mean the shell has hit the x-axis
+    rb = r .> sqrt(x2 + y2 + z2) #! rvalues that mean the shell no longer bounded by the origin
+
+    V[.!rx] .+= (1/6) * π * (r[.!rx] .^ 3) #! volume of octant before reaching wall in x direction
+
+    I0 = rx .&& .!ry #! indices of radii before hitting y wall
+    V[I0] .+= (1/12) * π * (3*r[I0] .^ 2 .- x2) #! volume of octant before reaching wall in y direction
+
+    #! split depending on whether shells first reach z wall or xy edge
+    #! next, the growing shell could either hit the z wall or reach the edge
+    #! where the x and y walls meet; the other of these two must come next
+    if z2 <= x2+y2 #! reach wall in z direction first
+        I1 = ry .&& .!rz #! indices of radii before hitting z wall
+        I2 = rz .&& .!rxy #! indices of radii after hitting z wall and before reaching xy edge
+        ri = r[I2] #! radii after hitting z wall and before reaching xy edge
+        ri2 = r2[I2]
+
+        V[I2] .+= (1 / 12) * π * (ri2 .* (3 * (x + y + z) .- 4 * ri) .- (x3 + y3 + z3)) #! volume at radii between hitting z wall and reaching xy edge
+
+    else #! reaches xy edge first
+        I1 = ry .&& .!rxy #! indices of radii before hitting xy edge
+        I2 = rxy .&& .!rz #! indices of radii after hitting xy edge and before reaching z wall
+        ri = r[I2] #! radii after hitting xy edge and before reaching z wall
+        ri2 = r2[I2] #! precompute radius squared
+        z1 = sqrt.(ri2 .- (x2 + y2)) #! useful value to precompute
+
+        V[I2] .+= (1 / 6) * (2 * xy * z1 .+
+                           atan.(y ./ z1) .* x .* (3 * ri2 .- x2) +
+                           atan.(x ./ z1) .* y .* (3 * ri2 .- y2) +
+                           -2 * atan.(xy ./ (ri .* z1)) .* ri2 .* ri
+        ) #! volume at radii between reaching xy edge and hitting z wall
+    end
+
+    ri = r[I1] #! radii before z wall or xy edge (whichever came first)
+    ri2 = r2[I1] #! precompute radius squared
+
+    V[I1] .+= (1 / 12) * π * (ri2 .* (3 * (x + y) .- 2 * ri) .- (x3 + y3)) #! volume before reaching z wall or xy edge
+
+    #! go from further of z wall and xy edge up to xz edge
+    I3 = rz .&& rxy .&& .!rxz #! indices of radii after reaching both z wall and xy edge before hitting xz edge
+    ri = r[I3] #! radii after reaching both z wall and xy edge before hitting xz edge
+    ri2 = r2[I3] #! precompue radius squared
+    z1 = sqrt.(ri2 .- (x2 + y2)) #! precompute a useful quantity
+
+    V[I3] .+= (1 / 12) * π * (ri2 .* (3 * z .- 2 * ri) .- z3) +
+            (1 / 6) * (
+        2 * xy * z1 .+
+        x * (3 * ri2 .- x2) .* atan.(y ./ z1) +
+        y * (3 * ri2 .- y2) .* atan.(x ./ z1) +
+        -2 * ri .* ri2 .* atan.(xy ./ (ri .* z1))
+    ) #! volume between z wall/xy edge and xz edge
+
+    #! go from xz edge up to yz edge
+    I4 = rxz .&& .!ryz #! indices of radii after reaching xz edge and before reaching yz edge
+    ri = r[I4] #! radii after reaching xz edge and before reaching yz edge
+    ri2 = r2[I4] #! precompue radius squared
+    y1 = sqrt.(ri2 .- (x2 + z2)) #! precompute a useful quantity
+    z1 = sqrt.(ri2 .- (x2 + y2)) #! precompute a useful quantity
+
+    V[I4] .+= (1 / 6) * (
+        2 * x * (z * y1 + y * z1) .+
+        (atan.(y ./ z1) - atan.(y1 ./ z)) .* x .* (3 * ri2 .- x2) +
+        atan.(x ./ z1) .* y .* (3 * ri2 .- y2) +
+        atan.(x ./ y1) .* z .* (3 * ri2 .- z2) -
+        2 * ri2 .* ri .* (atan.(xy ./ (ri .* z1)) + atan.(xz ./ (ri .* y1)))
+    )
+
+    #! go from yz edge up to the corner and then we're out of the woods!!
+    I5 = ryz .&& .!rb #! indices of radii after reaching yz edge and before reaching the corner
+    ri = r[I5] #! radii after reaching yz edge and before reaching the corner
+    ri2 = r2[I5] #! precompue radius squared
+
+    x1 = sqrt.(ri2 .- (y2 + z2)) #! precompute a useful quantity
+    y1 = sqrt.(ri2 .- (x2 + z2)) #! precompute a useful quantity
+    z1 = sqrt.(ri2 .- (x2 + y2)) #! precompute a useful quantity
+
+    V[I5] .+= (1 / 6) * (
+        2 * (xy * z1 + xz * y1 + yz * x1) .+
+        x * (3 * ri2 .- x2) .* (atan.(z ./ y1) - atan.(z1 ./ y)) +
+        y * (3 * ri2 .- y2) .* (atan.(z ./ x1) - atan.(z1 ./ x)) +
+        z * (3 * ri2 .- z2) .* (atan.(y ./ x1) - atan.(y1 ./ x)) +
+        2 * ri2 .* ri .* (atan.(x * z1 ./ (ri .* y)) - atan.(xz ./ (ri .* y1)) + atan.(y * z1 ./ (ri .* x)) - atan.(yz ./ (ri .* x1)))
+    )
+
+    #! going beyond the corner
+    V[rb] .+= xy*z #! you're welcome to explore this area, but there's not much of interest beyond...
+end
 end
