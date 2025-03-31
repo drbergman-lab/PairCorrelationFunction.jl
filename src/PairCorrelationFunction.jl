@@ -14,7 +14,6 @@ A struct to hold the constants needed for the pair correlation function calculat
 - `base_point::NTuple{N, Float64}`: The base point of the grid to be used to calculate distance to the boundary.
 - `domain_volume::Float64`: The volume of the domain.
 - `radii::AbstractRange{<:Real}`: The range of radii to be used for the pair correlation function.
-- `nr::Int`: The number of radii.
 - `radii2::AbstractVector{<:Real}`: The squared values of the radii.
 
 # Examples
@@ -31,17 +30,17 @@ Constants for 2D pair correlation function:
   domain_volume: 810000.0
   radii: 0.0 - 1300.0
   #annuli: 65
+```
 """
 struct Constants{N}
     grid_size::NTuple{N, Float64}
     base_point::NTuple{N, Float64}
     domain_volume::Float64
     radii::AbstractRange{<:Real}
-    nr::Int
     radii2::AbstractVector{<:Real}
 
     function Constants(grid_size::NTuple{N, Float64}, base_point::NTuple{N, Float64}, domain_volume::Float64, radii) where N
-        new{N}(grid_size, base_point, domain_volume, radii, length(radii), radii .^ 2)
+        new{N}(grid_size, base_point, domain_volume, radii, radii .^ 2)
     end
 
     function Constants(xlims::Tuple{Float64, Float64}, ylims::Tuple{Float64, Float64}, radii)
@@ -67,7 +66,7 @@ function Base.show(io::IO, ::MIME"text/plain", constants::Constants)
     println(io, "  base_point: $(constants.base_point)")
     println(io, "  domain_volume: $(constants.domain_volume)")
     println(io, "  radii: $(constants.radii |> first) - $(constants.radii |> last)")
-    println(io, "  #annuli: $(constants.nr-1)")
+    println(io, "  #annuli: $(length(constants.radii)-1)")
 end
 
 """
@@ -90,7 +89,7 @@ function pcf(centers::AbstractMatrix{<:Real}, targets::AbstractMatrix{<:Real}, c
     n_centers = size(centers, 1)
     n_targets = size(targets, 1)
     distances = zeros(Float64, n_centers, n_targets)
-    volumes = zeros(Float64, constants.nr - 1)
+    volumes = zeros(Float64, length(constants.radii) - 1)
     for (i, center) in enumerate(eachrow(centers))
         distances[i, :] = (targets .- center') .^ 2 |> x -> sum(x, dims=2)
         relative_center = vec(center) .- constants.base_point
@@ -108,7 +107,7 @@ end
 
 function computeVolume(center::AbstractVector{<:Real}, constants::Constants{2})
     x, y = center
-    A = zeros(Float64, constants.nr)
+    A = zeros(Float64, length(constants.radii))
     for x₀ in [x, constants.grid_size[1] - x]
         for y₀ in [y, constants.grid_size[2] - y]
             addQuarterArea!(A, (x₀, y₀), constants)
@@ -137,7 +136,7 @@ end
 
 function computeVolume(center::AbstractVector{<:Real}, constants::Constants{3})
     x, y, z = center
-    A = zeros(Float64, constants.nr)
+    A = zeros(Float64, length(constants.radii))
     for x₀ in [x, constants.grid_size[1] - x]
         for y₀ in [y, constants.grid_size[2] - y]
             for z₀ in [z, constants.grid_size[3] - z]
