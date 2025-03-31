@@ -46,5 +46,30 @@ using Test
         400.0 -400.0 -200.0
     ]
 
-    @test_throws ErrorException pcf(centers_matrix_3d, targets_matrix_3d, constants_3d)
+    #! test that the error is thrown when the centers are outside the limits
+    g3 = pcf(centers_matrix_3d, targets_matrix_3d, constants_3d)
+
+    centers_matrix_3d = [
+        -500.0 500.0 500.0
+    ]
+
+    @test_throws AssertionError pcf(centers_matrix_3d, targets_matrix_3d, constants_3d)
+
+    #! do PCF that we can compute by hand to verify
+    xlims = (0.0, 1.0)
+    ylims = (0.0, 1.0)
+    radii = 0:5.0:10.0
+    constants = Constants(xlims, ylims, radii)
+    centers_matrix = [
+        0.5 0.5
+    ]
+    targets_matrix = [
+        0.25 0.25
+    ]
+    g = pcf(centers_matrix, targets_matrix, constants)
+    @test g[1] == 1.0
+    @test all(isnan.(g[2:end]) .|| g[2:end] .== 0.0)
+
+    Base.show(stdout, MIME"text/plain"(), constants)
+
 end
