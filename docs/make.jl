@@ -20,4 +20,5 @@ makedocs(;
 deploydocs(;
     repo="github.com/drbergman-lab/PairCorrelationFunction.jl",
     devbranch="development",
+    push_preview=true,
 )

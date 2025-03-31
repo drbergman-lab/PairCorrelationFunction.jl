@@ -38,9 +38,15 @@ struct Constants{N}
     domain_volume::Float64
     radii::AbstractRange{<:Real}
     radii2::AbstractVector{<:Real}
-
-    function Constants(grid_size::NTuple{N, Float64}, base_point::NTuple{N, Float64}, domain_volume::Float64, radii) where N
+    
+    function Constants(grid_size::NTuple{N,Float64}, base_point::NTuple{N,Float64}, domain_volume::Float64, radii) where {N}
         new{N}(grid_size, base_point, domain_volume, radii, radii .^ 2)
+    end
+
+    function Constants(grid_size::NTuple{N,Float64}, base_point::NTuple{N,Float64}, domain_volume::Float64, dr::Real) where {N}
+        max_radii_multiples = (sqrt(sum(grid_size .^ 2))) / dr |> ceil
+        radii = 0:dr:(max_radii_multiples*dr)
+        return Constants(grid_size, base_point, domain_volume, radii)
     end
 
     function Constants(xlims::Tuple{Float64, Float64}, ylims::Tuple{Float64, Float64}, radii)
