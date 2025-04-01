@@ -1,11 +1,19 @@
 using PairCorrelationFunction
 using Test
 
+@generated function ≂(x, y)
+    if !isempty(fieldnames(x)) && x == y
+        mapreduce(n -> :(x.$n == y.$n), (a,b)->:($a && $b), fieldnames(x))
+    else
+        :(x == y)
+    end
+end
+
 @testset "PairCorrelationFunction.jl" begin
     # 2D testing
     xlims = (-450.0, 450.0)
     ylims = (-450.0, 450.0)
-    radii = 0:20.0:1300.0
+    radii = 0:20.0:1280.0
     constants = Constants(xlims, ylims, radii)
 
     centers_matrix = [
@@ -27,8 +35,14 @@ using Test
 
     g = pcf(centers_matrix, targets_matrix, constants)
 
+    dr = 20.0
+    constants_v2 = Constants(xlims, ylims, dr)
+    @test constants ≂ constants_v2
+    @test isequal(g, pcf(centers_matrix, targets_matrix, constants_v2))
+
     #3D testing
     zlims = (-450.0, 450.0)
+    radii = 0:20.0:1560.0
     constants_3d = Constants(xlims, ylims, zlims, radii)
     centers_matrix_3d = [
         20.0 30.0 40.0;
@@ -46,9 +60,12 @@ using Test
         400.0 -400.0 -200.0
     ]
 
-    #! test that the error is thrown when the centers are outside the limits
     g3 = pcf(centers_matrix_3d, targets_matrix_3d, constants_3d)
-
+    constants_3d_v2 = Constants(xlims, ylims, zlims, dr)
+    @test constants_3d ≂ constants_3d_v2
+    @test isequal(g3, pcf(centers_matrix_3d, targets_matrix_3d, constants_3d_v2))
+    
+    #! test that the error is thrown when the centers are outside the limits
     centers_matrix_3d = [
         -500.0 500.0 500.0
     ]
