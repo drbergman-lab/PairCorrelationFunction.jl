@@ -1,9 +1,9 @@
 using PairCorrelationFunction
-using Test
+using Test, Plots
 
 @generated function ≂(x, y)
     if !isempty(fieldnames(x)) && x == y
-        mapreduce(n -> :(x.$n == y.$n), (a,b)->:($a && $b), fieldnames(x))
+        mapreduce(n -> :(isequal(x.$n, y.$n)), (a,b)->:($a && $b), fieldnames(x))
     else
         :(x == y)
     end
@@ -35,10 +35,29 @@ end
 
     g = pcf(centers_matrix, targets_matrix, constants)
 
+    Base.show(stdout, MIME"text/plain"(), g)
+
+    g_self = pcf(centers_matrix, constants)
+
     dr = 20.0
     constants_v2 = Constants(xlims, ylims, dr)
     @test constants ≂ constants_v2
-    @test isequal(g, pcf(centers_matrix, targets_matrix, constants_v2))
+    @test g ≂ pcf(centers_matrix, targets_matrix, constants_v2)
+    pcfplot(g)
+    pcfplot(g.g)
+    pcfplot(constants.radii, g_self)
+    pcfplot([g, g_self])
+    pcfplot(constants.radii[1:end-1], [g, g_self])
+    
+    G = hcat(g, g_self)
+    Base.show(stdout, MIME"text/plain"(), G)
+    pcfplot(G)
+    pcfplot(G.g)
+    pcfplot([G, G], clims=(0.0, 2.0))
+    pcfplot([G.g, G.g])
+    pcfplot([100.0, 200.0], G)
+    pcfplot([100.0, 200.0], constants.radii, G)
+    @test_throws ArgumentError pcfplot("not_correct_input")
 
     #3D testing
     zlims = (-450.0, 450.0)
@@ -63,7 +82,7 @@ end
     g3 = pcf(centers_matrix_3d, targets_matrix_3d, constants_3d)
     constants_3d_v2 = Constants(xlims, ylims, zlims, dr)
     @test constants_3d ≂ constants_3d_v2
-    @test isequal(g3, pcf(centers_matrix_3d, targets_matrix_3d, constants_3d_v2))
+    @test g3 ≂ pcf(centers_matrix_3d, targets_matrix_3d, constants_3d_v2)
     
     #! test that the error is thrown when the centers are outside the limits
     centers_matrix_3d = [
@@ -84,8 +103,8 @@ end
         0.25 0.25
     ]
     g = pcf(centers_matrix, targets_matrix, constants)
-    @test g[1] == 1.0
-    @test all(isnan.(g[2:end]) .|| g[2:end] .== 0.0)
+    @test g.g[1] == 1.0
+    @test all(isnan.(g.g[2:end]) .|| g.g[2:end] .== 0.0)
 
     Base.show(stdout, MIME"text/plain"(), constants)
 
