@@ -1,6 +1,6 @@
 module PairCorrelationFunction
 
-using NaNStatistics, RecipesBase, Statistics, PlotUtils
+using NaNStatistics, RecipesBase, PlotUtils
 
 export pcf, Constants, pcfplot
 
@@ -440,10 +440,10 @@ pcfplot
     r, t, g = processPCFPlotArguments(p.args...)
 
     if isnothing(t)
-        y = reduce(hcat, g) |> x -> mean(x; dims=2) |> vec
+        y = reduce(hcat, g) |> x -> nanmean(x; dims=2)
         @series begin
             if length(g) > 1
-                ribbon := reduce(hcat, g) |> x -> std(x; dims=2) |> vec
+                ribbon := reduce(hcat, g) |> x -> nanstd(x; dim=2)
             end
             label --> missing
             r, y
@@ -457,7 +457,7 @@ pcfplot
             [r[1], r[end]], ones(Int, 2)
         end
     else
-        z = cat(g...; dims=3) |> x -> mean(x; dims=3) |> x -> reshape(x, length(r), length(t))
+        z = cat(g...; dims=3) |> x -> nanmean(x; dim=3)
         one_point_fn = (l, u) -> (1 - l) / (u - l)
         if :clims in keys(plotattributes)
             one_point = one_point_fn(plotattributes[:clims]...)
