@@ -5,9 +5,13 @@ using NaNStatistics
 export pcf, Constants
 
 """
-    Constants
+    Constants(xlims::Tuple{Float64, Float64}, ylims::Tuple{Float64, Float64}[, zlims::Tuple{Float64, Float64}], dr::Real)
+    Constants(xlims::Tuple{Float64, Float64}, ylims::Tuple{Float64, Float64}[, zlims::Tuple{Float64, Float64}], radii::AbstractRange{<:Real})
 
 A struct to hold the constants needed for the pair correlation function calculation.
+
+The vector of radii that define the concentric annuli must have constant spacing.
+You may either pass in the spacing `dr` or a range of radii in the form `r0:dr:rf`.
 
 # Fields
 - `grid_size::NTuple{N, Float64}`: The size of the grid in each dimension.
@@ -31,6 +35,21 @@ Constants for 2D pair correlation function:
   radii: 0.0 - 1300.0
   #annuli: 65
 ```
+
+```jldoctest
+using PairCorrelationFunction
+xlims = (-450.0, 450.0)
+ylims = (-450.0, 450.0)
+zlims = (-450.0, 450.0)
+dr = 100.0
+constants = Constants(xlims, ylims, zlims, dr)
+# output
+Constants for 3D pair correlation function:
+  grid_size: (900.0, 900.0, 900.0)
+  base_point: (-450.0, -450.0, -450.0)
+  domain_volume: 729000000.0
+  radii: 0.0 - 1600.0
+  #annuli: 16
 """
 struct Constants{N}
     grid_size::NTuple{N, Float64}
@@ -40,6 +59,7 @@ struct Constants{N}
     radii2::AbstractVector{<:Real}
     
     function Constants(grid_size::NTuple{N,Float64}, base_point::NTuple{N,Float64}, domain_volume::Float64, radii) where {N}
+        @assert radii[1] == 0.0 "The first radius must be 0.0. Got $(radii[1])"
         new{N}(grid_size, base_point, domain_volume, radii, radii .^ 2)
     end
 
@@ -82,6 +102,9 @@ Calculate the pair correlation function for a set of centers and targets.
 
 For each point in the `centers` matrix, compute the distance to each point in the `targets` matrix.
 Bin these distances by the radii defined in the `constants` object.
+If `targets` is not provided, the function will use `centers` as both centers and targets.
+Technically, this is the traditional pcf.
+The version with `centers` and `targets` is the cross-PCF.
 
 # Arguments
 - `centers::AbstractMatrix{<:Real}`: A matrix of centers, where each row is a center.
@@ -92,6 +115,18 @@ Bin these distances by the radii defined in the `constants` object.
 - `pcf::Vector{Float64}`: A vector of normalized target densities for each annulus around all centers.
 """
 function pcf(centers::AbstractMatrix{<:Real}, targets::AbstractMatrix{<:Real}, constants::Constants)
+    N, volumes, n_targets = pcf_binning(centers, targets, constants)
+    return pcf_calculate(N, volumes, n_targets, constants)
+end
+
+function pcf(centers::AbstractMatrix{<:Real}, constants::Constants)
+    N, volumes, n_targets = pcf_binning(centers, centers, constants)
+    N[1] -= 1 #! do not count the center point as one of its targets
+    n_targets -= 1 #! make sure to normalize by the number of targets that could be found by any given center
+    return pcf_calculate(N, volumes, n_targets, constants)
+end
+
+function pcf_binning(centers::AbstractMatrix{<:Real}, targets::AbstractMatrix{<:Real}, constants::Constants)
     n_centers = size(centers, 1)
     n_targets = size(targets, 1)
     distances = zeros(Float64, n_centers, n_targets)
@@ -108,8 +143,10 @@ function pcf(centers::AbstractMatrix{<:Real}, targets::AbstractMatrix{<:Real}, c
         volumes .+= computeVolume(relative_center, constants)
     end
     N, _ = histcountindices(vec(distances .|> sqrt), constants.radii)
-    return (N./volumes) ./ (n_targets/constants.domain_volume)
+    return N, volumes, n_targets
 end
+
+pcf_calculate(N, volumes, n_targets, constants) = (N ./ volumes) ./ (n_targets / constants.domain_volume)
 
 function computeVolume(center::AbstractVector{<:Real}, constants::Constants{2})
     x, y = center

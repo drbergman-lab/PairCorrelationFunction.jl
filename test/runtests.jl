@@ -34,6 +34,7 @@ end
     ]
 
     g = pcf(centers_matrix, targets_matrix, constants)
+    g_self = pcf(centers_matrix, constants)
 
     dr = 20.0
     constants_v2 = Constants(xlims, ylims, dr)
