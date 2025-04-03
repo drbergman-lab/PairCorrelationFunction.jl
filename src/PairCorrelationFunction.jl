@@ -44,7 +44,6 @@ PCFResult:
   Radii: 0.0 - 2.0 with 2 annuli
   g: 0.5 - 1.4 (min - max)
 ```
-
 """
 struct PCFResult
     radii::AbstractVector{<:Real}
@@ -108,7 +107,6 @@ Constants for 2D pair correlation function:
   radii: 0.0 - 1300.0
   #annuli: 65
 ```
-
 ```jldoctest
 using PairCorrelationFunction
 xlims = (-450.0, 450.0)
@@ -120,9 +118,10 @@ constants = Constants(xlims, ylims, zlims, dr)
 Constants for 3D pair correlation function:
   grid_size: (900.0, 900.0, 900.0)
   base_point: (-450.0, -450.0, -450.0)
-  domain_volume: 729000000.0
+  domain_volume: 7.29e8
   radii: 0.0 - 1600.0
   #annuli: 16
+```
 """
 struct Constants{N}
     grid_size::NTuple{N,Float64}
