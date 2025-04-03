@@ -108,4 +108,9 @@ end
 
     Base.show(stdout, MIME"text/plain"(), constants)
 
+    #! test when g is constant
+    G_uniform = deepcopy(G)
+    G_uniform.g .= 1.0
+    pcfplot(G_uniform)
+
 end
