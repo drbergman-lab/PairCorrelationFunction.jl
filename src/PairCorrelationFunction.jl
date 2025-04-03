@@ -193,7 +193,7 @@ end
 
 function pcf(centers::AbstractMatrix{<:Real}, constants::Constants)
     N, volumes, n_targets = pcf_binning(centers, centers, constants)
-    N[1] -= 1 #! do not count the center point as one of its targets
+    N[1] -= n_targets #! do not count the center point as one of its targets
     n_targets -= 1 #! make sure to normalize by the number of targets that could be found by any given center
     return pcf_calculate(N, volumes, n_targets, constants)
 end
@@ -284,19 +284,19 @@ end
 
 function computeVolume(center::AbstractVector{<:Real}, constants::Constants{3})
     x, y, z = center
-    A = zeros(Float64, length(constants.radii))
+    V = zeros(Float64, length(constants.radii)-1)
     for x₀ in [x, constants.grid_size[1] - x]
         for y₀ in [y, constants.grid_size[2] - y]
             for z₀ in [z, constants.grid_size[3] - z]
-                addOctantVolume!(A, (x₀, y₀, z₀), constants)
+                addOctantVolume!(V, (x₀, y₀, z₀), constants)
             end
         end
     end
-    return diff(A)
+    return V
 end
 
 function addOctantVolume!(V::Vector{Float64}, center::NTuple{3,Float64}, constants::Constants{3})
-    r, r2 = constants.radii, constants.radii2
+    r, r2 = constants.radii[2:end], constants.radii2[2:end]
     x, y, z = sort([center...]) #! this algorithm works by assuming that x<=y<=z
 
     x2, y2, z2 = x^2, y^2, z^2
@@ -314,7 +314,7 @@ function addOctantVolume!(V::Vector{Float64}, center::NTuple{3,Float64}, constan
     V[.!rx] .+= (1 / 6) * π * (r[.!rx] .^ 3) #! volume of octant before reaching wall in x direction
 
     I0 = rx .&& .!ry #! indices of radii before hitting y wall
-    V[I0] .+= (1 / 12) * π * (3 * r[I0] .^ 2 .- x2) #! volume of octant before reaching wall in y direction
+    V[I0] .+= (1 / 12) * π * (3 * r2[I0] .- x2) #! volume of octant before reaching wall in y direction
 
     #! split depending on whether shells first reach z wall or xy edge
     #! next, the growing shell could either hit the z wall or reach the edge

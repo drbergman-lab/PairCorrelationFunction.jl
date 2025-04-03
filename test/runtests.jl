@@ -34,15 +34,20 @@ end
     ]
 
     g = pcf(centers_matrix, targets_matrix, constants)
+    @test all(g.g .>= 0.0 .|| isnan.(g.g))
 
     Base.show(stdout, MIME"text/plain"(), g)
 
     g_self = pcf(centers_matrix, constants)
+    @test all(g_self.g .>= 0.0 .|| isnan.(g_self.g))
 
     dr = 20.0
     constants_v2 = Constants(xlims, ylims, dr)
     @test constants ≂ constants_v2
-    @test g ≂ pcf(centers_matrix, targets_matrix, constants_v2)
+    g_v2 = pcf(centers_matrix, targets_matrix, constants_v2)
+    @test g ≂ g_v2
+    @test all(g_v2.g .>= 0.0 .|| isnan.(g_v2.g))
+
     pcfplot(g)
     pcfplot(g.g)
     pcfplot(constants.radii, g_self)
@@ -80,6 +85,8 @@ end
     ]
 
     g3 = pcf(centers_matrix_3d, targets_matrix_3d, constants_3d)
+    @test all(g3.g .>= 0.0 .|| isnan.(g3.g))
+
     constants_3d_v2 = Constants(xlims, ylims, zlims, dr)
     @test constants_3d ≂ constants_3d_v2
     @test g3 ≂ pcf(centers_matrix_3d, targets_matrix_3d, constants_3d_v2)
@@ -103,6 +110,7 @@ end
         0.25 0.25
     ]
     g = pcf(centers_matrix, targets_matrix, constants)
+    @test all(g.g .>= 0.0 .|| isnan.(g.g))
     @test g.g[1] == 1.0
     @test all(isnan.(g.g[2:end]) .|| g.g[2:end] .== 0.0)
 
