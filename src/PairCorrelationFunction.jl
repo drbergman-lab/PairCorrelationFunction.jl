@@ -471,7 +471,7 @@ pcfplot
 @recipe function f(p::PCFPlot)
     r, t, g = processPCFPlotArguments(p.args...)
 
-    if isnothing(t)
+    if isnothing(t) || t isa Real || (t isa AbstractVector && length(t) == 1)
         y = reduce(hcat, g) |> x -> nanmean(x; dims=2)
         @series begin
             if length(g) > 1
