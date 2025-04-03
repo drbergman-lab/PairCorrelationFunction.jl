@@ -1,6 +1,6 @@
 module PairCorrelationFunction
 
-using NaNStatistics, RecipesBase, Statistics, PlotUtils
+using NaNStatistics, RecipesBase, PlotUtils
 
 export pcf, Constants, pcfplot
 
@@ -44,7 +44,6 @@ PCFResult:
   Radii: 0.0 - 2.0 with 2 annuli
   g: 0.5 - 1.4 (min - max)
 ```
-
 """
 struct PCFResult
     radii::AbstractVector{<:Real}
@@ -108,7 +107,6 @@ Constants for 2D pair correlation function:
   radii: 0.0 - 1300.0
   #annuli: 65
 ```
-
 ```jldoctest
 using PairCorrelationFunction
 xlims = (-450.0, 450.0)
@@ -120,9 +118,10 @@ constants = Constants(xlims, ylims, zlims, dr)
 Constants for 3D pair correlation function:
   grid_size: (900.0, 900.0, 900.0)
   base_point: (-450.0, -450.0, -450.0)
-  domain_volume: 729000000.0
+  domain_volume: 7.29e8
   radii: 0.0 - 1600.0
   #annuli: 16
+```
 """
 struct Constants{N}
     grid_size::NTuple{N,Float64}
@@ -200,12 +199,13 @@ function pcf(centers::AbstractMatrix{<:Real}, constants::Constants)
 end
 
 function pcf_binning(centers::AbstractMatrix{<:Real}, targets::AbstractMatrix{<:Real}, constants::Constants)
-    n_centers = size(centers, 1)
     n_targets = size(targets, 1)
-    distances = zeros(Float64, n_centers, n_targets)
+    N = zeros(Int, length(constants.radii) - 1)
     volumes = zeros(Float64, length(constants.radii) - 1)
     for (i, center) in enumerate(eachrow(centers))
-        distances[i, :] = (targets .- center') .^ 2 |> x -> sum(x, dims=2)
+        distances = (targets .- center') .^ 2 |> x -> sum(x, dims=2) .|> sqrt |> vec
+        _histcounts_include_min!(N, distances, constants.radii)
+
         relative_center = vec(center) .- constants.base_point
 
         @assert all(relative_center .>= 0) && all(relative_center .<= constants.grid_size) """
@@ -215,11 +215,43 @@ function pcf_binning(centers::AbstractMatrix{<:Real}, targets::AbstractMatrix{<:
 
         volumes .+= computeVolume(relative_center, constants)
     end
-    N, _ = histcountindices(vec(distances .|> sqrt), constants.radii)
     return N, volumes, n_targets
 end
 
 pcf_calculate(N, volumes, n_targets, constants) = PCFResult(constants.radii, (N ./ volumes) ./ (n_targets / constants.domain_volume))
+
+"""
+    _histcounts_include_min!(N::Vector{Int}, x::Vector{Float64}, xedges::AbstractRange{<:Real})
+
+Like `histcounts!`, but includes the minimum edge of the histogram in the first bin.
+
+This function relies on `xedges[1]==0.0` and the input `x` being all distances to guarantee no value is less than 0.
+Users can pass in radii with any upper bound and nothing stops the targets from being outside the domain, so we cannot guarantee that the maximum value of `x` is less than or equal to the maximum value of `xedges`.
+"""
+function _histcounts_include_min!(N::Vector{Int}, x::Vector{Float64}, xedges::AbstractRange{<:Real})
+    @assert firstindex(N) === 1
+
+    # What is the size of each bin?
+    nbins = length(xedges) - 1
+    xmin, xmax = extrema(xedges)
+    didx = nbins / (xmax - xmin)
+
+    # Make sure we don't have a segfault by filling beyond the length of N
+    @assert length(N) == nbins "length(N) != nbins; got length(N)=$(length(N)) and nbins=$(nbins)"
+
+    # Loop through each element of x
+    @inbounds for xi in x
+        if xi == xmin
+            N[1] += 1
+            continue
+        end
+        i_ = (xi - xmin) * didx
+        if 0 < i_ <= nbins
+            i = ceil(Int, i_)
+            N[i] += 1
+        end
+    end
+end
 
 function computeVolume(center::AbstractVector{<:Real}, constants::Constants{2})
     x, y = center
@@ -440,10 +472,10 @@ pcfplot
     r, t, g = processPCFPlotArguments(p.args...)
 
     if isnothing(t)
-        y = reduce(hcat, g) |> x -> mean(x; dims=2) |> vec
+        y = reduce(hcat, g) |> x -> nanmean(x; dims=2)
         @series begin
             if length(g) > 1
-                ribbon := reduce(hcat, g) |> x -> std(x; dims=2) |> vec
+                ribbon := reduce(hcat, g) |> x -> nanstd(x; dim=2)
             end
             label --> missing
             r, y
@@ -457,13 +489,22 @@ pcfplot
             [r[1], r[end]], ones(Int, 2)
         end
     else
-        z = cat(g...; dims=3) |> x -> mean(x; dims=3) |> x -> reshape(x, length(r), length(t))
+        z = cat(g...; dims=3) |> x -> nanmean(x; dim=3)
         one_point_fn = (l, u) -> (1 - l) / (u - l)
         if :clims in keys(plotattributes)
             one_point = one_point_fn(plotattributes[:clims]...)
         else
-            one_point = one_point_fn(minimum(z), maximum(z))
+            l = nanminimum(z)
+            u = nanmaximum(z)
+            if l == u
+                #! if all values are the same, then set the clims to (0.0, 2.0)
+                one_point = 0.5
+                plotattributes[:clims] = (0.0, 2.0)
+            else
+                one_point = one_point_fn(l, u)
+            end
         end
+        z[isnan.(z)] .= -Inf #! set NaN values to -Inf so the heatmap can happen and show the color as low as possible
         @series begin
             seriestype := :heatmap
             color --> cgrad(colorscheme, [one_point])
