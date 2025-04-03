@@ -468,7 +468,7 @@ pcfplot([100.0, 200.0], 0:20.0:100.0, RESULT) # explicitly pass in radii
 """
 pcfplot
 
-@recipe function f(p::PCFPlot; colorscheme=:tofino)
+@recipe function f(p::PCFPlot)
     r, t, g = processPCFPlotArguments(p.args...)
 
     if isnothing(t)
@@ -505,6 +505,7 @@ pcfplot
             end
         end
         z[isnan.(z)] .= -Inf #! set NaN values to -Inf so the heatmap can happen and show the color as low as possible
+        colorscheme = :colorscheme in keys(plotattributes) ? plotattributes[:colorscheme] : :tofino
         @series begin
             seriestype := :heatmap
             color --> cgrad(colorscheme, [one_point])
